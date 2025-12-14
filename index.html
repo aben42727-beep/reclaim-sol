@@ -1,27 +1,283 @@
 <!DOCTYPE html>
+<!--
+====================================================
+🔧 EDIT ONLY THIS SECTION (SAFE & REQUIRED)
+====================================================
+
+1) Replace YOUR_FEE_WALLET_ADDRESS with YOUR Solana address
+2) Set SERVICE_FEE_SOL to 0 if you want fees OFF for now
+3) Optionally change BRAND_NAME
+
+DO NOT edit anything else unless you know what you're doing.
+====================================================
+-->
+<script>
+const BRAND_NAME = "Reclaim SOL";
+const SERVICE_FEE_SOL = 0.003; // set to 0 to disable fees
+const FEE_WALLET_ADDRESS = "65xhhR376yDqzVHxUGvP1duWdkoze2ZTWWcWY4Utn2TL";
+</script>
+<!-- END EDIT SECTION -->
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Reclaim SOL</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Safely reclaim SOL rent from unused Solana token accounts. Non-custodial, Phantom-only." />
+<meta charset="UTF-8" />
+<title>Reclaim SOL — Wallet Cleanup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Clean and optimize your Solana wallet. Reclaim unused SOL safely. Non-custodial, Phantom-first." />
+
+<script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+<script src="https://unpkg.com/@solana/spl-token@0.4.8/lib/index.iife.min.js"></script>
+
+<style>
+:root{
+  --bg:#07070b;
+  --card:rgba(255,255,255,.06);
+  --stroke:rgba(255,255,255,.12);
+  --text:#fff;
+  --muted:rgba(255,255,255,.65);
+  --accent:#7c5cff;
+
+  --silver:linear-gradient(135deg,#f5f7fb,#cfd3dd,#ffffff);
+  --gold:linear-gradient(135deg,#fff2b3,#e2b84b,#fff7cc);
+  --platinum:linear-gradient(135deg,#e8f0ff,#b7c7e6,#f7fbff);
+  --diamond:linear-gradient(135deg,#d9fbff,#8fe1ff,#ffffff);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:
+    radial-gradient(900px 600px at 10% -10%,rgba(124,92,255,.35),transparent 60%),
+    radial-gradient(900px 600px at 90% 0%,rgba(82,224,255,.2),transparent 55%),
+    var(--bg);
+  color:var(--text);
+  padding:24px;
+}
+
+.wrap{max-width:1000px;margin:auto}
+h1{margin:0;font-size:30px}
+h2{margin:18px 0 8px}
+p{color:var(--muted)}
+
+.card{
+  background:var(--card);
+  border:1px solid var(--stroke);
+  border-radius:18px;
+  padding:16px;
+  margin-top:16px;
+}
+
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.btn{
+  background:var(--accent);
+  border:none;
+  border-radius:14px;
+  padding:12px 16px;
+  font-weight:700;
+  color:#fff;
+}
+.btn.secondary{background:rgba(255,255,255,.08)}
+.btn:disabled{opacity:.5}
+
+.table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+.table th,.table td{
+  border-bottom:1px solid rgba(255,255,255,.08);
+  padding:8px;
+}
+.table th{color:var(--muted);text-align:left}
+
+.badge{
+  padding:10px 14px;
+  border-radius:14px;
+  border:1px solid var(--stroke);
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.coin{width:36px;height:36px;border-radius:12px}
+
+input[type=checkbox]{transform:scale(1.2)}
+small{color:var(--muted)}
+
+.footer{
+  margin-top:24px;
+  font-size:12px;
+  color:rgba(255,255,255,.5);
+}
+</style>
 </head>
-<body style="font-family: system-ui; padding: 24px; background:#0b0b0b; color:#fff;">
-  <h1>Reclaim SOL</h1>
 
-  <p>
-    A safe, non-custodial tool that helps you reclaim SOL locked as rent in unused token accounts.
-  </p>
+<body>
+<div class="wrap">
 
-  <ul>
-    <li>✅ Phantom wallet only</li>
-    <li>✅ No seed phrases</li>
-    <li>✅ You approve every transaction</li>
-    <li>✅ SOL goes back to <b>your wallet</b></li>
-  </ul>
+<h1 id="brand"></h1>
+<p>Clean and optimize your Solana wallet. Reclaim unused SOL safely.</p>
 
-  <p style="margin-top:24px; opacity:.7;">
-    App logic coming next…
-  </p>
+<div class="card row">
+  <div>
+    <div id="walletAddr">Not connected</div>
+    <small>Open inside Phantom → Browser</small>
+  </div>
+  <button class="btn" id="connectBtn">Connect Phantom</button>
+</div>
+
+<div class="card row">
+  <button class="btn secondary" id="scanBtn" disabled>Scan Wallet</button>
+  <div id="scanStatus"></div>
+</div>
+
+<div class="card">
+  <h2>Reclaimable Accounts</h2>
+  <table class="table">
+    <thead>
+      <tr><th>Use</th><th>Account</th><th>Type</th><th>SOL</th></tr>
+    </thead>
+    <tbody id="acctTable">
+      <tr><td colspan="4">Run scan to see results</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" id="tierCard" style="display:none">
+  <div class="badge">
+    <div class="coin" id="tierCoin"></div>
+    <div>
+      <b id="tierName"></b><br/>
+      <small id="tierDesc"></small>
+    </div>
+    <div style="margin-left:auto"><b id="tierAmt"></b></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Options</h2>
+  <label>
+    <input type="checkbox" id="unwrapWSOL" />
+    Unwrap Wrapped SOL (manual opt-in)
+  </label><br/><br/>
+
+  <label>
+    <input type="checkbox" id="serviceFee" />
+    Support the project (optional service fee)
+  </label>
+  <small><br/>Fee is clearly shown in Phantom before approval.</small>
+</div>
+
+<div class="card row">
+  <button class="btn" id="reclaimBtn" disabled>Reclaim SOL</button>
+  <div id="txStatus"></div>
+</div>
+
+<div class="card">
+<h2>Safety & How It Works</h2>
+<ul>
+<li>We never ask for seed phrases or private keys</li>
+<li>You approve every transaction in Phantom</li>
+<li>This software only closes unused token accounts</li>
+<li>All SOL returns to your wallet</li>
+<li>This is wallet maintenance software, not financial advice</li>
+</ul>
+</div>
+
+<div class="footer">
+Built as non-custodial software. Always verify the Phantom confirmation screen.
+</div>
+
+</div>
+
+<script>
+document.getElementById("brand").textContent = BRAND_NAME;
+
+const {Connection,PublicKey,Transaction,SystemProgram,LAMPORTS_PER_SOL}=solanaWeb3;
+const {TOKEN_PROGRAM_ID,createCloseAccountInstruction}=splToken;
+
+const WSOL_MINT="So11111111111111111111111111111111111111112";
+const RPC="https://api.mainnet-beta.solana.com";
+
+let provider,wallet,connection=new Connection(RPC,"confirmed");
+let rows=[];
+
+const acctTable=document.getElementById("acctTable");
+const scanStatus=document.getElementById("scanStatus");
+const txStatus=document.getElementById("txStatus");
+
+document.getElementById("connectBtn").onclick=async()=>{
+  provider=window.solana;
+  if(!provider||!provider.isPhantom){alert("Open this site inside Phantom Browser");return;}
+  const res=await provider.connect({onlyIfTrusted:false});
+  wallet=res.publicKey;
+  document.getElementById("walletAddr").textContent=wallet.toBase58();
+  document.getElementById("scanBtn").disabled=false;
+};
+
+document.getElementById("scanBtn").onclick=async()=>{
+  scanStatus.textContent="Scanning…";
+  rows=[];
+  acctTable.innerHTML="";
+  const parsed=await connection.getParsedTokenAccountsByOwner(wallet,{programId:TOKEN_PROGRAM_ID});
+  let total=0;
+
+  for(const a of parsed.value){
+    const info=a.account.data.parsed.info;
+    const amt=info.tokenAmount.uiAmount;
+    const mint=info.mint;
+    if(amt===0||mint===WSOL_MINT){
+      const ai=await connection.getAccountInfo(a.pubkey);
+      const lam=ai.lamports;
+      total+=lam;
+      rows.push({pk:a.pubkey,mint,lam,checked:amt===0});
+    }
+  }
+
+  if(rows.length===0){
+    acctTable.innerHTML="<tr><td colspan=4>No reclaimable accounts</td></tr>";
+    return;
+  }
+
+  rows.forEach((r,i)=>{
+    acctTable.innerHTML+=`
+      <tr>
+        <td><input type="checkbox" ${r.checked?"checked":""} onchange="rows[${i}].checked=this.checked"></td>
+        <td>${r.pk.toBase58().slice(0,6)}…</td>
+        <td>${r.mint===WSOL_MINT?"WSOL":"Empty Token"}</td>
+        <td>${(r.lam/LAMPORTS_PER_SOL).toFixed(6)}</td>
+      </tr>`;
+  });
+
+  document.getElementById("reclaimBtn").disabled=false;
+  scanStatus.textContent="Scan complete";
+};
+
+document.getElementById("reclaimBtn").onclick=async()=>{
+  txStatus.textContent="Preparing transaction…";
+  const tx=new Transaction();
+
+  rows.filter(r=>r.checked).forEach(r=>{
+    if(r.mint===WSOL_MINT && !document.getElementById("unwrapWSOL").checked) return;
+    tx.add(createCloseAccountInstruction(r.pk,wallet,wallet));
+  });
+
+  if(SERVICE_FEE_SOL>0 && document.getElementById("serviceFee").checked){
+    tx.add(SystemProgram.transfer({
+      fromPubkey:wallet,
+      toPubkey:new PublicKey(FEE_WALLET_ADDRESS),
+      lamports:SERVICE_FEE_SOL*LAMPORTS_PER_SOL
+    }));
+  }
+
+  tx.feePayer=wallet;
+  tx.recentBlockhash=(await connection.getLatestBlockhash()).blockhash;
+  const signed=await provider.signTransaction(tx);
+  const sig=await connection.sendRawTransaction(signed.serialize());
+  await connection.confirmTransaction(sig);
+
+  txStatus.innerHTML=`Success: <a href="https://solscan.io/tx/${sig}" target="_blank">${sig}</a>`;
+};
+</script>
 </body>
 </html>
