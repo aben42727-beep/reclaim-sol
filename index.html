@@ -5,23 +5,137 @@
   <title>Reclaim SOL</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Safely reclaim SOL rent from unused Solana token accounts. Non-custodial, Phantom-only." />
+  <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+  <script src="https://unpkg.com/@solana/spl-token@0.4.8/lib/index.iife.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui;
+      background: #0b0b0b;
+      color: #fff;
+      padding: 24px;
+      max-width: 720px;
+      margin: auto;
+    }
+    button {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: none;
+      background: #7c5cff;
+      color: white;
+      font-size: 16px;
+      margin-top: 12px;
+    }
+    button.secondary {
+      background: #222;
+    }
+    .box {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      background: #141414;
+    }
+    .small {
+      opacity: 0.7;
+      font-size: 14px;
+    }
+  </style>
 </head>
-<body style="font-family: system-ui; padding: 24px; background:#0b0b0b; color:#fff;">
-  <h1>Reclaim SOL</h1>
+<body>
 
-  <p>
-    A safe, non-custodial tool that helps you reclaim SOL locked as rent in unused token accounts.
-  </p>
+<h1>Reclaim SOL</h1>
+<p class="small">
+  Non-custodial tool to reclaim SOL locked as rent in unused token accounts.
+</p>
 
-  <ul>
-    <li>✅ Phantom wallet only</li>
-    <li>✅ No seed phrases</li>
-    <li>✅ You approve every transaction</li>
-    <li>✅ SOL goes back to <b>your wallet</b></li>
-  </ul>
+<div class="box">
+  <button id="connectBtn">Connect Phantom</button>
+  <div id="wallet" class="small"></div>
+</div>
 
-  <p style="margin-top:24px; opacity:.7;">
-    App logic coming next…
-  </p>
+<div class="box">
+  <button id="scanBtn" class="secondary">Scan for reclaimable SOL</button>
+  <div id="results" class="small"></div>
+</div>
+
+<div class="box">
+  <button id="closeBtn">Reclaim SOL</button>
+  <div id="status" class="small"></div>
+</div>
+
+<script>
+const { Connection, PublicKey, Transaction } = solanaWeb3;
+const { TOKEN_PROGRAM_ID, createCloseAccountInstruction } = splToken;
+
+const RPC = "https://api.mainnet-beta.solana.com";
+const connection = new Connection(RPC, "confirmed");
+
+let provider;
+let wallet;
+let emptyAccounts = [];
+
+document.getElementById("connectBtn").onclick = async () => {
+  provider = window?.phantom?.solana;
+  if (!provider?.isPhantom) {
+    alert("Phantom wallet not found");
+    return;
+  }
+  const res = await provider.connect();
+  wallet = res.publicKey;
+  document.getElementById("wallet").innerText =
+    "Connected: " + wallet.toBase58();
+};
+
+document.getElementById("scanBtn").onclick = async () => {
+  if (!wallet) return alert("Connect wallet first");
+  emptyAccounts = [];
+  document.getElementById("results").innerText = "Scanning...";
+
+  const accounts = await connection.getParsedTokenAccountsByOwner(
+    wallet,
+    { programId: TOKEN_PROGRAM_ID }
+  );
+
+  let totalLamports = 0;
+
+  for (const a of accounts.value) {
+    const amount = a.account.data.parsed.info.tokenAmount.uiAmount;
+    if (amount === 0) {
+      const info = await connection.getAccountInfo(a.pubkey);
+      totalLamports += info.lamports;
+      emptyAccounts.push(a.pubkey);
+    }
+  }
+
+  document.getElementById("results").innerText =
+    `Found ${emptyAccounts.length} empty accounts.\nEstimated reclaim: ${(totalLamports / 1e9).toFixed(6)} SOL`;
+};
+
+document.getElementById("closeBtn").onclick = async () => {
+  if (!wallet || emptyAccounts.length === 0) {
+    alert("Nothing to reclaim");
+    return;
+  }
+
+  const tx = new Transaction();
+  emptyAccounts.forEach(acc => {
+    tx.add(createCloseAccountInstruction(acc, wallet, wallet));
+  });
+
+  tx.feePayer = wallet;
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+  const signed = await provider.signTransaction(tx);
+  const sig = await connection.sendRawTransaction(signed.serialize());
+  await connection.confirmTransaction(sig);
+
+  document.getElementById("status").innerText =
+    "Success! Transaction: " + sig;
+};
+</script>
+
+<p class="small" style="margin-top:24px;">
+  We never access your keys. You approve everything in Phantom.
+</p>
+
 </body>
 </html>
